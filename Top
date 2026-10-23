@@ -1,0 +1,168 @@
+
+`timescale 1ns / 1ps
+
+module top(
+    input wire clk,
+    input wire btnC,
+    input wire btnU,
+    input wire btnR,
+    input wire [15:0] sw,
+    output wire [15:0] led
+);
+
+    // =====================================
+    // BUTTON SYNCHRONIZATION
+    // =====================================
+
+    reg [1:0] sync_c = 0;
+    reg [1:0] sync_r = 0;
+    reg [1:0] sync_u = 0;
+
+    always @(posedge clk) begin
+        sync_c <= {sync_c[0], btnC};
+        sync_r <= {sync_r[0], btnR};
+        sync_u <= {sync_u[0], btnU};
+    end
+
+    wire reset = sync_u[1];
+
+    // =====================================
+    // BUTTON DEBOUNCERS
+    // 20 ms at 100 MHz
+    // =====================================
+
+    reg [30:0] count_c = 0;
+    reg [20:0] count_r = 0;
+
+    reg clean_c = 0;
+    reg clean_r = 0;
+    reg prev_r = 0;
+
+    always @(posedge clk) begin
+        if (reset) begin
+            count_c <= 0;
+            count_r <= 0;
+            clean_c <= 0;
+            clean_r <= 0;
+            prev_r <= 0;
+        end
+        else begin
+
+            // Center button
+            if (sync_c[1] == clean_c)
+                count_c <= 0;
+            else if (count_c == 99999999) begin
+                clean_c <= sync_c[1];
+                count_c <= 0;
+            end
+            else
+                count_c <= count_c + 1;
+
+            // Right button
+            if (sync_r[1] == clean_r)
+                count_r <= 0;
+            else if (count_r == 1999999) begin
+                clean_r <= sync_r[1];
+                count_r <= 0;
+            end
+            else
+                count_r <= count_r + 1;
+
+            prev_r <= clean_r;
+        end
+    end
+
+    wire step_pulse = clean_r && !prev_r;
+
+    // =====================================
+    // SYNCHRONIZE SEQUENCE INPUT
+    // =====================================
+
+    reg [1:0] sw_sync = 0;
+
+    always @(posedge clk)
+        sw_sync <= {sw_sync[0], sw[0]};
+
+    wire bit_in = sw_sync[1];
+
+    // =====================================
+    // MOORE FSM - DETECT 1100
+    // =====================================
+
+    localparam M0    = 3'd0;
+    localparam M1    = 3'd1;
+    localparam M11   = 3'd2;
+    localparam M110  = 3'd3;
+    localparam MATCH = 3'd4;
+
+    reg [2:0] moore_state = M0;
+    reg [2:0] moore_next;
+
+    always @(*) begin
+        case (moore_state)
+            M0:    moore_next = bit_in ? M1 : M0;
+            M1:    moore_next = bit_in ? M11 : M0;
+            M11:   moore_next = bit_in ? M11 : M110;
+            M110:  moore_next = bit_in ? M1 : MATCH;
+            MATCH: moore_next = bit_in ? M1 : M0;
+            default: moore_next = M0;
+        endcase
+    end
+
+    always @(posedge clk) begin
+        if (reset)
+            moore_state <= M0;
+        else if (step_pulse)
+            moore_state <= moore_next;
+    end
+
+    wire moore_detected = (moore_state == MATCH);
+
+    // =====================================
+    // MEALY FSM - DETECT 1101
+    // =====================================
+
+    localparam E0   = 2'd0;
+    localparam E1   = 2'd1;
+    localparam E11  = 2'd2;
+    localparam E110 = 2'd3;
+
+    reg [1:0] mealy_state = E0;
+    reg [1:0] mealy_next;
+    reg mealy_detected = 0;
+
+    always @(*) begin
+        case (mealy_state)
+            E0:   mealy_next = bit_in ? E1 : E0;
+            E1:   mealy_next = bit_in ? E11 : E0;
+            E11:  mealy_next = bit_in ? E11 : E110;
+            E110: mealy_next = bit_in ? E1 : E0;
+            default: mealy_next = E0;
+        endcase
+    end
+
+    always @(posedge clk) begin
+        if (reset) begin
+            mealy_state <= E0;
+            mealy_detected <= 0;
+        end
+        else if (step_pulse) begin
+            mealy_state <= mealy_next;
+            mealy_detected <=
+                (mealy_state == E110 && bit_in);
+        end
+    end
+
+    // =====================================
+    // LED OUTPUTS
+    // =====================================
+
+    assign led[0] = clean_c;
+    assign led[1] = moore_detected;
+    assign led[2] = mealy_detected;
+
+    assign led[15:3] = 13'b0;
+
+endmodule
+
+
