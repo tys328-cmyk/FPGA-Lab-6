@@ -1,0 +1,52 @@
+`timescale 1ns / 1ps
+
+
+module tb_mealy_1101;
+
+    reg clk;
+    reg reset;
+    reg x;
+    wire detected;
+
+    // Instantiate Mealy sequence detector
+    mealy_1101 uut (
+        .clk(clk),
+        .reset(reset),
+        .x(x),
+        .detected(detected)
+    );
+
+    // Clock period = 10 ns
+    always #5 clk = ~clk;
+
+    initial begin
+        clk = 0;
+        reset = 1;
+        x = 0;
+
+        #20;
+        reset = 0;
+
+        // Test sequence: 1101
+        @(negedge clk); x = 1;
+        @(negedge clk); x = 1;
+        @(negedge clk); x = 0;
+        @(negedge clk); x = 1;
+
+        // Test overlapping sequence: 101
+        // Combined sequence: 1101101
+        @(negedge clk); x = 1;
+        @(negedge clk); x = 0;
+        @(negedge clk); x = 1;
+
+        // Test additional zeros
+        @(negedge clk); x = 0;
+        @(negedge clk); x = 0;
+
+        @(negedge clk);
+        $finish;
+    end
+
+endmodule
+
+
