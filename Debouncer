@@ -1,0 +1,58 @@
+`timescale 1ns / 1ps
+
+
+module tb_debouncer;
+
+    reg clk;
+    reg reset;
+    reg noisy;
+    wire clean;
+
+    // Instantiate the debouncer
+    // Small count for faster simulation
+    debouncer #(
+        .COUNT_MAX(5)
+    ) uut (
+        .clk(clk),
+        .reset(reset),
+        .noisy(noisy),
+        .clean(clean)
+    );
+
+    // 100 MHz clock
+    always #5 clk = ~clk;
+
+    initial begin
+        clk = 0;
+        reset = 1;
+        noisy = 0;
+
+        #20;
+        reset = 0;
+
+        // Simulate button bouncing
+        #20 noisy = 1;
+        #10 noisy = 0;
+        #10 noisy = 1;
+        #10 noisy = 0;
+        #10 noisy = 1;
+
+        // Hold button HIGH
+        #200;
+
+        // Simulate bouncing on release
+        noisy = 0;
+        #10 noisy = 1;
+        #10 noisy = 0;
+        #10 noisy = 1;
+        #10 noisy = 0;
+
+        // Hold button LOW
+        #200;
+
+        $finish;
+    end
+
+endmodule
+
+
