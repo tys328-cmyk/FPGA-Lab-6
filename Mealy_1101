@@ -1,0 +1,41 @@
+
+`timescale 1ns / 1ps
+
+module mealy_1101(
+    input wire clk,
+    input wire reset,
+    input wire x,
+    output wire detected
+);
+
+    localparam S0   = 2'd0;
+    localparam S1   = 2'd1;
+    localparam S11  = 2'd2;
+    localparam S110 = 2'd3;
+
+    reg [1:0] state = S0;
+    reg [1:0] next_state;
+
+    always @(posedge clk) begin
+        if (reset)
+            state <= S0;
+        else
+            state <= next_state;
+    end
+
+    always @(*) begin
+        case (state)
+            S0:    next_state = x ? S1 : S0;
+            S1:    next_state = x ? S11 : S0;
+            S11:   next_state = x ? S11 : S110;
+            S110:  next_state = x ? S1 : S0;
+            default: next_state = S0;
+        endcase
+    end
+
+    // Output is HIGH when the final 1 arrives
+    assign detected = (state == S110) && x;
+
+endmodule
+
+
