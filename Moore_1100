@@ -1,0 +1,79 @@
+
+`timescale 1ns / 1ps
+
+module moore_1100(
+    input wire clk,
+    input wire reset,
+    input wire x,
+    output wire detected
+);
+
+    // State definitions
+    localparam S0    = 3'b000;
+    localparam S1    = 3'b001;
+    localparam S11   = 3'b010;
+    localparam S110  = 3'b011;
+    localparam MATCH = 3'b100;
+
+    reg [2:0] state = S0;
+    reg [2:0] next_state;
+
+    // State register
+    always @(posedge clk) begin
+        if (reset)
+            state <= S0;
+        else
+            state <= next_state;
+    end
+
+    // Next-state logic
+    always @(*) begin
+        case (state)
+
+            S0: begin
+                if (x)
+                    next_state = S1;
+                else
+                    next_state = S0;
+            end
+
+            S1: begin
+                if (x)
+                    next_state = S11;
+                else
+                    next_state = S0;
+            end
+
+            S11: begin
+                if (x)
+                    next_state = S11;
+                else
+                    next_state = S110;
+            end
+
+            S110: begin
+                if (x)
+                    next_state = S1;
+                else
+                    next_state = MATCH;
+            end
+
+            MATCH: begin
+                if (x)
+                    next_state = S1;
+                else
+                    next_state = S0;
+            end
+
+            default:
+                next_state = S0;
+
+        endcase
+    end
+
+    // Moore output logic
+    assign detected = (state == MATCH);
+
+endmodule
+
+
